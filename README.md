@@ -124,11 +124,13 @@ O frontend está em desenvolvimento. Quando estiver pronto, as instruções ser�
 
 ### Desenvolvimento
 ```bash
+cd backend
 npm run dev          # Executa o servidor em modo de desenvolvimento com hot reload
 ```
 
 ### Banco de dados
 ```bash
+cd backend
 npm run migrate:make -- nome_da_migracao    # Cria uma nova migração
 npm run migrate                             # Executa todas as migrações pendentes
 npm run migrate:rollback                    # Reverte a última migração
@@ -154,17 +156,17 @@ npm run seed                                # Executa todos os seeds
 - ✅ Arquivos de migração (`backend/src/db/migrations/`)
 - ✅ Seeds (`backend/src/db/seeds/`)
 - ✅ Código fonte (`backend/src/`, `frontend/`)
-- ✅ Configurações (`package.json`, `knexfile.ts`)
-- ✅ Documentação (`README.md`)
+- ✅ Configurações (`backend/package.json`, `backend/knexfile.ts`)
+- ✅ Documentação (`README.md`, `backend/README.md`)
 
 **O que NÃO deve ser versionado:**
 - ❌ Banco de dados (`backend/src/db/*.db`)
-- ❌ Dependências (`node_modules/`)
+- ❌ Dependências (`backend/node_modules/`)
 - ❌ Variáveis de ambiente (`.env`)
 
 ## 🔧 Ambientes
 
-O projeto suporta diferentes ambientes configurados no `knexfile.ts`:
+O projeto suporta diferentes ambientes configurados no `backend/knexfile.ts`:
 
 - **Development**: `backend/src/db/app-data.db`
 - **Test**: `backend/src/db/test.db`
@@ -176,7 +178,7 @@ O ambiente é determinado pela variável `NODE_ENV`.
 
 O arquivo `app-data.db` (banco de dados SQLite) é criado automaticamente quando você executa as migrações. O processo funciona assim:
 
-1. **Primeira execução**: Quando você roda `npm run migrate` pela primeira vez:
+1. **Primeira execução**: Quando você roda `npm run migrate` pela primeira vez (dentro da pasta `backend/`):
    - O Knex cria automaticamente o arquivo `backend/src/db/app-data.db` (se não existir)
    - Executa todas as migrações pendentes
    - Cria as tabelas definidas nas migrações

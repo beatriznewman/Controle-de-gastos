@@ -1,6 +1,25 @@
-# Sistema de Controle de Gastos e Metas
+# Sistema de Controle de Gastos e Metas - Backend
 
 Sistema para controle de gastos pessoais com metas por categoria, desenvolvido em Node.js com Fastify e SQLite.
+
+> **Nota**: Este é o backend da aplicação. O projeto completo está organizado com backend e frontend separados.
+
+## Estrutura do Projeto
+
+```
+backend/
+├── src/
+│   ├── app.ts           # Aplicação principal com todas as rotas
+│   ├── server.ts        # Servidor HTTP
+│   ├── database.ts      # Configuração do banco de dados
+│   ├── types/           # Definições de tipos TypeScript
+│   └── db/
+│       ├── migrations/  # Migrações do banco de dados
+│       ├── seeds/       # Dados iniciais
+│       └── app-data.db  # Banco SQLite (não versionado)
+├── knexfile.ts          # Configuração do Knex.js
+└── package.json         # Dependências do backend
+```
 
 ## Funcionalidades
 
@@ -130,11 +149,48 @@ Resposta:
 
 ## Instalação e Execução
 
-1. Clone o repositório
-2. Instale as dependências: `npm install`
-3. Execute as migrações: `npm run migrate`
-4. Execute os seeds: `npm run seed`
-5. Inicie o servidor: `npm run dev`
+1. **Entre na pasta do backend**
+   ```bash
+   cd backend
+   ```
+
+2. **Instale as dependências**
+   ```bash
+   npm install
+   ```
+
+3. **Execute as migrações**
+   ```bash
+   npm run migrate
+   ```
+
+4. **Execute os seeds (opcional)**
+   ```bash
+   npm run seed
+   ```
+
+5. **Inicie o servidor**
+   ```bash
+   npm run dev
+   ```
+
+A API estará disponível em: `http://localhost:3333`
+
+## Comandos Disponíveis
+
+### Desenvolvimento
+```bash
+npm run dev          # Executa o servidor em modo de desenvolvimento com hot reload
+```
+
+### Banco de dados
+```bash
+npm run migrate:make -- nome_da_migracao    # Cria uma nova migração
+npm run migrate                             # Executa todas as migrações pendentes
+npm run migrate:rollback                    # Reverte a última migração
+npm run seed:make -- nome_do_seed           # Cria um novo seed
+npm run seed                                # Executa todos os seeds
+```
 
 ## Tecnologias Utilizadas
 
@@ -143,3 +199,13 @@ Resposta:
 - **Knex.js** - Query builder
 - **SQLite** - Banco de dados
 - **TypeScript** - Tipagem estática
+
+## Ambientes
+
+O projeto suporta diferentes ambientes configurados no `knexfile.ts`:
+
+- **Development**: `./src/db/app-data.db`
+- **Test**: `./src/db/test.db`
+- **Production**: `./src/db/production.db`
+
+O ambiente é determinado pela variável `NODE_ENV`.

@@ -9,6 +9,9 @@ const config: { [key: string]: Knex.Config } = {
     migrations: {
       directory: "src/db/migrations"
     },
+    seeds: {
+      directory: "src/db/seeds"
+    },
     useNullAsDefault: true
   },
 
@@ -20,6 +23,9 @@ const config: { [key: string]: Knex.Config } = {
     migrations: {
       directory: "src/db/migrations"
     },
+    seeds: {
+      directory: "src/db/seeds"
+    },
     useNullAsDefault: true
   },
 
@@ -30,6 +36,9 @@ const config: { [key: string]: Knex.Config } = {
     },
     migrations: {
       directory: "src/db/migrations"
+    },
+    seeds: {
+      directory: "src/db/seeds"
     },
     useNullAsDefault: true
   }

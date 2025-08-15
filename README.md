@@ -152,3 +152,109 @@ cloud/
 - **SQLite**: Banco de dados local
 - **TypeScript**: Linguagem de programação
 - **TSX**: Executor de TypeScript para desenvolvimento
+
+## 📊 Guia do Banco de Dados
+
+Este projeto usa Knex.js para gerenciar o banco de dados SQLite.
+
+### Estrutura de Arquivos
+
+```
+src/db/
+├── migrations/     # Migrations para criar/modificar tabelas
+├── seeds/         # Seeds para popular dados iniciais
+├── app-data.db    # Banco de dados de desenvolvimento
+├── test.db        # Banco de dados de teste
+└── production.db  # Banco de dados de produção
+```
+
+### Comandos Disponíveis
+
+#### Migrations
+
+- **Criar uma nova migration:**
+  ```bash
+  npm run migrate:make -- nome_da_migration
+  ```
+
+- **Executar migrations pendentes:**
+  ```bash
+  npm run migrate
+  ```
+
+- **Reverter última migration:**
+  ```bash
+  npm run migrate:rollback
+  ```
+
+#### Seeds
+
+- **Criar um novo seed:**
+  ```bash
+  npm run seed:make -- nome_do_seed
+  ```
+
+- **Executar seeds:**
+  ```bash
+  npm run seed
+  ```
+
+### Como Criar Novas Tabelas
+
+1. Crie uma nova migration:
+   ```bash
+   npm run migrate:make -- create_nome_tabela_table
+   ```
+
+2. Edite o arquivo gerado em `src/db/migrations/` com a estrutura da tabela
+
+3. Execute a migration:
+   ```bash
+   npm run migrate
+   ```
+
+### Exemplo de Migration
+
+```typescript
+import type { Knex } from "knex";
+
+export async function up(knex: Knex): Promise<void> {
+  return knex.schema.createTable("products", (table) => {
+    table.increments("id").primary();
+    table.string("name").notNullable();
+    table.decimal("price", 10, 2).notNullable();
+    table.text("description");
+    table.timestamp("created_at").defaultTo(knex.fn.now());
+  });
+}
+
+export async function down(knex: Knex): Promise<void> {
+  return knex.schema.dropTable("products");
+}
+```
+
+### Exemplo de Seed
+
+```typescript
+import type { Knex } from "knex";
+
+export async function seed(knex: Knex): Promise<void> {
+  await knex("products").del();
+  
+  await knex("products").insert([
+    {
+      name: "Produto 1",
+      price: 29.99,
+      description: "Descrição do produto 1"
+    }
+  ]);
+}
+```
+
+### Ambientes
+
+- **Development:** `src/db/app-data.db`
+- **Test:** `src/db/test.db`
+- **Production:** `src/db/production.db`
+
+O ambiente é determinado pela variável `NODE_ENV`.

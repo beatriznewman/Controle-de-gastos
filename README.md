@@ -1,260 +1,145 @@
-# CONTROLE DE GASTOS
-# Integrantes 
-- Beatriz Cupa Newman 
-- Júlia Machado Duran  
-- Luigi Bertoli Menezes 
-# Objetivo da Aplicação e seu uso
-Uma aplicação de controle de gastos é extremamente relevante uma vez que resolve um problema que atinge milhares de pessoas, que é não saber para onde está indo o dinheiro. 
-Dessa maneira, a aplicação será útil para registrar os gastos e assim ter uma organização financeira melhor, permite definir limite para cada categoria (alimentação, viagem, roupas…), e criar um controle de metas, por exemplo. 
-# Componentes a serem utilizados 
+# Sistema de Controle de Gastos e Metas
 
-## 🚀 Como executar o projeto
+Sistema para controle de gastos pessoais com metas por categoria, desenvolvido em Node.js com Fastify e SQLite.
 
-### Pré-requisitos
-- Node.js (versão 18 ou superior)
-- npm ou yarn
+## Funcionalidades
 
-### Instalação e configuração
+### Gastos
+- ✅ Criar, listar, atualizar e deletar gastos
+- ✅ Associar gastos a categorias
+- ✅ Validação de dados
 
-1. **Clone o repositório e entre na pasta do projeto**
-```bash
-cd cloud
-```
+### Categorias
+- ✅ Criar, listar, atualizar e deletar categorias
+- ✅ Proteção contra exclusão de categorias com gastos ou metas
 
-2. **Instale as dependências**
-```bash
-npm install
-```
+### Metas por Categoria
+- ✅ Criar, listar, atualizar e deletar metas
+- ✅ **NOVO**: Cálculo automático do status das metas baseado nos gastos
+- ✅ **NOVO**: Verificação se a meta foi atingida (gastos ≤ valor da meta)
+- ✅ **NOVO**: Cálculo de progresso e valor restante
+- ✅ **NOVO**: Atualização automática do status ao criar/editar/deletar gastos
+- ✅ **NOVO**: Estatísticas por categoria
 
-3. **Configure o banco de dados**
-```bash
-# Executar as migrações para criar as tabelas
-npx knex migrate:latest
-```
+## Estrutura do Banco de Dados
 
-4. **Execute a aplicação em modo de desenvolvimento**
-```bash
-npm run dev
-```
+### Tabela `gastos`
+- `id` (PK)
+- `valor` (decimal)
+- `dataDoGasto` (timestamp)
+- `descricao` (text)
+- `categ_id` (FK para categorias)
 
-A aplicação estará disponível em: `http://localhost:3333`
+### Tabela `categorias`
+- `id` (PK)
+- `titulo` (text)
 
-### Como o arquivo .db é gerado
+### Tabela `metas`
+- `id` (PK)
+- `valor` (decimal) - valor máximo permitido
+- `data_in` (timestamp) - início do período
+- `data_fim` (timestamp) - fim do período
+- `metaBatida` (boolean) - calculado automaticamente
+- `id_gasto` (FK para gastos, opcional)
+- `categ_id` (FK para categorias)
 
-O arquivo `app-data.db` (banco de dados SQLite) é criado automaticamente quando você executa as migrações. O processo funciona assim:
+## API Endpoints
 
-1. **Primeira execução**: Quando você roda `npx knex migrate:latest` pela primeira vez:
-   - O Knex cria automaticamente o arquivo `src/db/app-data.db` (se não existir)
-   - Executa todas as migrações pendentes
-   - Cria as tabelas definidas nas migrações
+### Gastos
+- `GET /gastos` - Listar todos os gastos
+- `GET /gastos/:id` - Buscar gasto por ID
+- `POST /gastos` - Criar novo gasto
+- `PUT /gastos/:id` - Atualizar gasto
+- `DELETE /gastos/:id` - Deletar gasto
 
-2. **Estrutura do banco**: O arquivo `.db` contém:
-   - Tabelas criadas pelas migrações
-   - Dados inseridos pela aplicação
-   - Metadados do SQLite
+### Categorias
+- `GET /categorias` - Listar todas as categorias
+- `GET /categorias/:id` - Buscar categoria por ID
+- `POST /categorias` - Criar nova categoria
+- `PUT /categorias/:id` - Atualizar categoria
+- `DELETE /categorias/:id` - Deletar categoria
 
-3. **Ambientes diferentes**: O `knexfile.ts` define bancos diferentes para cada ambiente:
-   - **Development**: `src/db/app-data.db`
-   - **Test**: `src/db/test.db`
-   - **Production**: `src/db/production.db`
+### Metas
+- `GET /metas` - Listar todas as metas com status calculado
+- `GET /metas/:id` - Buscar meta por ID com status calculado
+- `POST /metas` - Criar nova meta
+- `PUT /metas/:id` - Atualizar meta
+- `DELETE /metas/:id` - Deletar meta
+- `GET /metas/categoria/:categoriaId` - **NOVO**: Ver metas e estatísticas por categoria
 
-### O que são Migrations?
+## Lógica de Cálculo das Metas
 
-**Migrations** são como "receitas" que definem como criar e modificar a estrutura do banco de dados. Imagine que você está construindo uma casa:
+### Como funciona:
+1. **Período da Meta**: Considera apenas gastos entre `data_in` e `data_fim`
+2. **Categoria**: Soma apenas gastos da categoria específica da meta
+3. **Status**: Meta é considerada "batida" se `totalGastos ≤ valorMeta`
+4. **Progresso**: Calculado como `(totalGastos / valorMeta) * 100`
+5. **Restante**: `valorMeta - totalGastos` (mínimo 0)
 
-- **Migration = Planta da casa**: Define onde ficam as paredes, portas, janelas
-- **Banco de dados = Casa construída**: O resultado final baseado nas plantas
+### Atualização Automática:
+- Ao criar um gasto: recalcula todas as metas da categoria
+- Ao atualizar um gasto: recalcula metas das categorias antiga e nova
+- Ao deletar um gasto: recalcula todas as metas da categoria
 
-#### Como funcionam:
+## Exemplos de Uso
 
-1. **Cada migration é um arquivo** que contém instruções para:
-   - Criar tabelas
-   - Adicionar colunas
-   - Modificar estruturas
-   - Inserir dados iniciais
-
-2. **Ordem cronológica**: As migrations são executadas em ordem de data/hora
-   - `20231201_001_criar_tabela_usuarios.js`
-   - `20231201_002_criar_tabela_gastos.js`
-   - `20231202_001_adicionar_categoria_gastos.js`
-
-3. **Controle de versão**: O banco "lembra" quais migrations já foram executadas
-   - Só executa as novas migrations
-   - Evita executar a mesma migration duas vezes
-
-#### Exemplo prático:
-```javascript
-// Migration: criar_tabela_usuarios.js
-exports.up = function(knex) {
-  return knex.schema.createTable('usuarios', table => {
-    table.increments('id').primary()
-    table.string('nome').notNullable()
-    table.string('email').unique().notNullable()
-    table.timestamps(true, true)
-  })
-}
-
-exports.down = function(knex) {
-  return knex.schema.dropTable('usuarios')
+### Criar uma meta
+```json
+POST /metas
+{
+  "valor": 1000.00,
+  "data_fim": "2024-12-31",
+  "categoria_id": 1
 }
 ```
 
-### Comandos úteis
-
-**Desenvolvimento:**
-```bash
-npm run dev          # Executa o servidor em modo de desenvolvimento com hot reload
+### Ver status de uma meta
+```json
+GET /metas/1
 ```
-
-**Banco de dados:**
-```bash
-npx knex migrate:make nome_da_migracao    # Cria uma nova migração
-npx knex migrate:latest                   # Executa todas as migrações pendentes
-npx knex migrate:rollback                 # Reverte a última migração
-npx knex migrate:status                   # Mostra o status das migrações
-```
-
-**Testes:**
-```bash
-npm test             # Executa os testes (quando implementados)
-```
-
-### Versionamento e Git
-
-**O que deve ser versionado:**
-- ✅ Arquivos de migração (`src/db/migrations/`)
-- ✅ Código fonte (`src/`)
-- ✅ Configurações (`package.json`, `knexfile.ts`)
-- ✅ Documentação (`README.md`)
-
-**O que NÃO deve ser versionado:**
-- ❌ Banco de dados (`src/db/*.db`)
-- ❌ Dependências (`node_modules/`)
-- ❌ Variáveis de ambiente (`.env`)
-
-### Estrutura do projeto
-```
-cloud/
-├── src/
-│   ├── db/
-│   │   ├── app-data.db          # Banco de dados SQLite (não versionado)
-│   │   └── migrations/          # Arquivos de migração (versionados)
-│   ├── database.ts              # Configuração do banco de dados
-│   └── server.ts                # Servidor Fastify
-├── knexfile.ts                  # Configuração do Knex
-├── package.json                 # Dependências e scripts
-└── README.md                    # Documentação
-```
-
-### Tecnologias utilizadas
-- **Fastify**: Framework web para Node.js
-- **Knex.js**: Query builder para banco de dados
-- **SQLite**: Banco de dados local
-- **TypeScript**: Linguagem de programação
-- **TSX**: Executor de TypeScript para desenvolvimento
-
-## 📊 Guia do Banco de Dados
-
-Este projeto usa Knex.js para gerenciar o banco de dados SQLite.
-
-### Estrutura de Arquivos
-
-```
-src/db/
-├── migrations/     # Migrations para criar/modificar tabelas
-├── seeds/         # Seeds para popular dados iniciais
-├── app-data.db    # Banco de dados de desenvolvimento
-├── test.db        # Banco de dados de teste
-└── production.db  # Banco de dados de produção
-```
-
-### Comandos Disponíveis
-
-#### Migrations
-
-- **Criar uma nova migration:**
-  ```bash
-  npm run migrate:make -- nome_da_migration
-  ```
-
-- **Executar migrations pendentes:**
-  ```bash
-  npm run migrate
-  ```
-
-- **Reverter última migration:**
-  ```bash
-  npm run migrate:rollback
-  ```
-
-#### Seeds
-
-- **Criar um novo seed:**
-  ```bash
-  npm run seed:make -- nome_do_seed
-  ```
-
-- **Executar seeds:**
-  ```bash
-  npm run seed
-  ```
-
-### Como Criar Novas Tabelas
-
-1. Crie uma nova migration:
-   ```bash
-   npm run migrate:make -- create_nome_tabela_table
-   ```
-
-2. Edite o arquivo gerado em `src/db/migrations/` com a estrutura da tabela
-
-3. Execute a migration:
-   ```bash
-   npm run migrate
-   ```
-
-### Exemplo de Migration
-
-```typescript
-import type { Knex } from "knex";
-
-export async function up(knex: Knex): Promise<void> {
-  return knex.schema.createTable("products", (table) => {
-    table.increments("id").primary();
-    table.string("name").notNullable();
-    table.decimal("price", 10, 2).notNullable();
-    table.text("description");
-    table.timestamp("created_at").defaultTo(knex.fn.now());
-  });
-}
-
-export async function down(knex: Knex): Promise<void> {
-  return knex.schema.dropTable("products");
+Resposta:
+```json
+{
+  "meta": { ... },
+  "totalGastos": 750.00,
+  "metaBatida": true,
+  "progresso": 75.0,
+  "restante": 250.00
 }
 ```
 
-### Exemplo de Seed
-
-```typescript
-import type { Knex } from "knex";
-
-export async function seed(knex: Knex): Promise<void> {
-  await knex("products").del();
-  
-  await knex("products").insert([
-    {
-      name: "Produto 1",
-      price: 29.99,
-      description: "Descrição do produto 1"
-    }
-  ]);
+### Ver metas por categoria
+```json
+GET /metas/categoria/1
+```
+Resposta:
+```json
+{
+  "categoria": { ... },
+  "metas": [ ... ],
+  "estatisticas": {
+    "totalGastosCategoria": 1500.00,
+    "totalMetas": 3,
+    "metasAtivas": 2,
+    "metasBatidas": 1,
+    "metasNaoBatidas": 0,
+    "taxaSucesso": 33.33
+  }
 }
 ```
 
-### Ambientes
+## Instalação e Execução
 
-- **Development:** `src/db/app-data.db`
-- **Test:** `src/db/test.db`
-- **Production:** `src/db/production.db`
+1. Clone o repositório
+2. Instale as dependências: `npm install`
+3. Execute as migrações: `npm run migrate`
+4. Execute os seeds: `npm run seed`
+5. Inicie o servidor: `npm run dev`
 
-O ambiente é determinado pela variável `NODE_ENV`.
+## Tecnologias Utilizadas
+
+- **Node.js** - Runtime JavaScript
+- **Fastify** - Framework web
+- **Knex.js** - Query builder
+- **SQLite** - Banco de dados
+- **TypeScript** - Tipagem estática

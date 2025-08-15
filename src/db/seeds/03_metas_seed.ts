@@ -21,31 +21,50 @@ export async function seed(knex: Knex): Promise<void> {
   // Encontra um gasto de alimentação para associar à meta
   const gastoAlimentacao = gastos.find(g => g.categ_id === alimentacaoId);
 
-  // Insere metas de exemplo
-  await knex("metas").insert([
-    {
-      valor: 500.00,
-      data_in: "2024-08-01 00:00:00",
-      data_fim: "2024-08-31",
-      metaBatida: false,
-      id_gasto: gastoAlimentacao?.id || null,
-      categ_id: alimentacaoId
-    },
-    {
-      valor: 300.00,
-      data_in: "2024-08-01 00:00:00",
-      data_fim: "2024-08-31",
-      metaBatida: false,
-      id_gasto: null,
-      categ_id: transporteId
-    },
-    {
-      valor: 200.00,
-      data_in: "2024-08-01 00:00:00",
-      data_fim: "2024-08-31",
-      metaBatida: false,
-      id_gasto: null,
-      categ_id: entretenimentoId
-    }
-  ]);
+  // Função para calcular se a meta foi batida
+  async function calcularMetaBatida(categoriaId: number, dataInicio: string, dataFim: string, valorMeta: number): Promise<boolean> {
+    const totalGastos = await knex("gastos")
+      .sum("valor as total")
+      .where("categ_id", categoriaId)
+      .whereBetween("dataDoGasto", [dataInicio, dataFim])
+      .first();
+    
+    const valorTotalGastos = totalGastos?.total || 0;
+    return valorTotalGastos <= valorMeta;
+  }
+
+  // Insere metas de exemplo com cálculo correto
+  const dataInicio = "2024-08-01 00:00:00";
+  const dataFim = "2024-08-31 23:59:59";
+
+  const metaAlimentacao = {
+    valor: 500.00,
+    data_in: dataInicio,
+    data_fim: dataFim,
+    metaBatida: await calcularMetaBatida(alimentacaoId!, dataInicio, dataFim, 500.00),
+    id_gasto: gastoAlimentacao?.id || null,
+    categ_id: alimentacaoId
+  };
+
+  const metaTransporte = {
+    valor: 300.00,
+    data_in: dataInicio,
+    data_fim: dataFim,
+    metaBatida: await calcularMetaBatida(transporteId!, dataInicio, dataFim, 300.00),
+    id_gasto: null,
+    categ_id: transporteId
+  };
+
+  const metaEntretenimento = {
+    valor: 200.00,
+    data_in: dataInicio,
+    data_fim: dataFim,
+    metaBatida: await calcularMetaBatida(entretenimentoId!, dataInicio, dataFim, 200.00),
+    id_gasto: null,
+    categ_id: entretenimentoId
+  };
+
+  await knex("metas").insert([metaAlimentacao, metaTransporte, metaEntretenimento]);
+
+  console.log("Metas criadas com status calculado baseado nos gastos existentes!");
 }

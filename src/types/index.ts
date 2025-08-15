@@ -70,6 +70,33 @@ export interface MetaResponse {
     categoria_nome: string
 }
 
+// ===== TIPOS PARA STATUS DAS METAS =====
+
+export interface MetaStatusResponse {
+    meta: MetaResponse
+    totalGastos: number
+    metaBatida: boolean
+    progresso: number
+    restante: number
+}
+
+export interface EstatisticasCategoria {
+    totalGastosCategoria: number
+    totalMetas: number
+    metasAtivas: number
+    metasBatidas: number
+    metasNaoBatidas: number
+    taxaSucesso: number
+}
+
+export interface MetasCategoriaResponse {
+    categoria: CategoriaResponse
+    metas: MetaStatusResponse[]
+    estatisticas: EstatisticasCategoria
+}
+
+
+
 // ===== TIPOS PARA PARÂMETROS =====
 
 export interface IdParam {

@@ -4,6 +4,51 @@ import { CreateGastoBody, CreateCategoriaBody, CreateMetaBody, UpdateGastoBody, 
 
 const app = fastify()
 
+// ===== FUNÇÃO UTILITÁRIA PARA CALCULAR STATUS DAS METAS =====
+
+async function calcularStatusMeta(metaId: number) {
+    try {
+        // Buscar a meta
+        const meta = await db('metas')
+            .select('metas.*', 'categorias.titulo as categoria_nome')
+            .join('categorias', 'metas.categ_id', 'categorias.id')
+            .where('metas.id', metaId)
+            .first()
+
+        if (!meta) {
+            throw new Error('Meta não encontrada')
+        }
+
+        // Calcular total de gastos na categoria dentro do período da meta
+        const totalGastos = await db('gastos')
+            .sum('valor as total')
+            .where('categ_id', meta.categ_id)
+            .whereBetween('dataDoGasto', [meta.data_in, meta.data_fim])
+            .first()
+
+        const valorTotalGastos = totalGastos?.total || 0
+        const metaBatida = valorTotalGastos <= meta.valor
+
+        // Atualizar o status da meta se necessário
+        if (meta.metaBatida !== metaBatida) {
+            await db('metas')
+                .where('id', metaId)
+                .update({ metaBatida })
+        }
+
+        return {
+            meta,
+            totalGastos: valorTotalGastos,
+            metaBatida,
+            progresso: Math.min((valorTotalGastos / meta.valor) * 100, 100),
+            restante: Math.max(meta.valor - valorTotalGastos, 0)
+        }
+    } catch (error) {
+        console.error('Erro ao calcular status da meta:', error)
+        throw error
+    }
+}
+
 // ===== ROTAS DE GASTOS =====
 
 // Listar todos os gastos
@@ -82,6 +127,16 @@ app.post('/gastos', async (req, res) => {
             .where("gastos.id", gastoId)
             .first()
 
+        // Recalcular status das metas da categoria
+        const metasDaCategoria = await db("metas").where("categ_id", categoria_id).select("id")
+        for (const meta of metasDaCategoria) {
+            try {
+                await calcularStatusMeta(meta.id)
+            } catch (error) {
+                console.error(`Erro ao recalcular meta ${meta.id}:`, error)
+            }
+        }
+
         return res.status(201).send({
             message: "Gasto criado com sucesso",
             gasto: gastoCriado
@@ -136,6 +191,23 @@ app.put('/gastos/:id', async (req, res) => {
             .where("gastos.id", id)
             .first()
 
+        // Recalcular status das metas da categoria (tanto da categoria antiga quanto da nova)
+        const categoriasParaRecalcular = new Set([gastoAtualizado.categ_id])
+        if (categoria_id && categoria_id !== gastoExistente.categ_id) {
+            categoriasParaRecalcular.add(categoria_id)
+        }
+
+        for (const categoriaId of categoriasParaRecalcular) {
+            const metasDaCategoria = await db("metas").where("categ_id", categoriaId).select("id")
+            for (const meta of metasDaCategoria) {
+                try {
+                    await calcularStatusMeta(meta.id)
+                } catch (error) {
+                    console.error(`Erro ao recalcular meta ${meta.id}:`, error)
+                }
+            }
+        }
+
         return {
             message: "Gasto atualizado com sucesso",
             gasto: gastoAtualizado
@@ -164,6 +236,16 @@ app.delete('/gastos/:id', async (req, res) => {
 
         // Deletar o gasto
         await db("gastos").where("id", id).del()
+
+        // Recalcular status das metas da categoria
+        const metasDaCategoria = await db("metas").where("categ_id", gasto.categ_id).select("id")
+        for (const meta of metasDaCategoria) {
+            try {
+                await calcularStatusMeta(meta.id)
+            } catch (error) {
+                console.error(`Erro ao recalcular meta ${meta.id}:`, error)
+            }
+        }
 
         return {
             message: "Gasto deletado com sucesso"
@@ -318,7 +400,7 @@ app.delete('/categorias/:id', async (req, res) => {
 
 // ===== ROTAS DE METAS =====
 
-// Listar todas as metas
+// Listar todas as metas com status calculado
 app.get('/metas', async () => {
     try {
         const metas = await db('metas')
@@ -326,33 +408,46 @@ app.get('/metas', async () => {
             .join('categorias', 'metas.categ_id', 'categorias.id')
             .orderBy('metas.data_in', 'desc')
 
-        return metas
+        // Calcular status para cada meta
+        const metasComStatus = await Promise.all(
+            metas.map(async (meta) => {
+                try {
+                    return await calcularStatusMeta(meta.id)
+                } catch (error) {
+                    console.error(`Erro ao calcular status da meta ${meta.id}:`, error)
+                    return {
+                        meta,
+                        totalGastos: 0,
+                        metaBatida: meta.metaBatida,
+                        progresso: 0,
+                        restante: meta.valor
+                    }
+                }
+            })
+        )
+
+        return metasComStatus
     } catch (error) {
         console.error("Erro ao listar metas:", error)
         throw new Error("Erro interno do servidor")
     }
 })
 
-// Buscar meta por ID
+// Buscar meta por ID com status calculado
 app.get('/metas/:id', async (req, res) => {
     try {
         const { id } = req.params as { id: string }
         
-        const meta = await db('metas')
-            .select('metas.*', 'categorias.titulo as categoria_nome')
-            .join('categorias', 'metas.categ_id', 'categorias.id')
-            .where('metas.id', id)
-            .first()
+        const statusMeta = await calcularStatusMeta(parseInt(id))
 
-        if (!meta) {
+        return statusMeta
+    } catch (error) {
+        console.error("Erro ao buscar meta:", error)
+        if (error instanceof Error && error.message === 'Meta não encontrada') {
             return res.status(404).send({
                 error: "Meta não encontrada"
             })
         }
-
-        return meta
-    } catch (error) {
-        console.error("Erro ao buscar meta:", error)
         return res.status(500).send({
             error: "Erro interno do servidor"
         })
@@ -512,6 +607,78 @@ app.delete('/metas/:id', async (req, res) => {
         })
     }
 })
+
+// Verificar progresso das metas por categoria
+app.get('/metas/categoria/:categoriaId', async (req, res) => {
+    try {
+        const { categoriaId } = req.params as { categoriaId: string }
+        
+        // Verificar se a categoria existe
+        const categoria = await db("categorias").where("id", categoriaId).first()
+        if (!categoria) {
+            return res.status(404).send({
+                error: "Categoria não encontrada"
+            })
+        }
+
+        // Buscar todas as metas da categoria
+        const metas = await db('metas')
+            .select('metas.*', 'categorias.titulo as categoria_nome')
+            .join('categorias', 'metas.categ_id', 'categorias.id')
+            .where('metas.categ_id', categoriaId)
+            .orderBy('metas.data_in', 'desc')
+
+        // Calcular status para cada meta
+        const metasComStatus = await Promise.all(
+            metas.map(async (meta) => {
+                try {
+                    return await calcularStatusMeta(meta.id)
+                } catch (error) {
+                    console.error(`Erro ao calcular status da meta ${meta.id}:`, error)
+                    return {
+                        meta,
+                        totalGastos: 0,
+                        metaBatida: meta.metaBatida,
+                        progresso: 0,
+                        restante: meta.valor
+                    }
+                }
+            })
+        )
+
+        // Calcular estatísticas gerais da categoria
+        const totalGastosCategoria = await db('gastos')
+            .sum('valor as total')
+            .where('categ_id', categoriaId)
+            .first()
+
+        const valorTotalGastosCategoria = totalGastosCategoria?.total || 0
+        const metasAtivas = metasComStatus.filter(m => new Date(m.meta.data_fim) >= new Date())
+        const metasBatidas = metasComStatus.filter(m => m.metaBatida)
+        const metasNaoBatidas = metasComStatus.filter(m => !m.metaBatida && new Date(m.meta.data_fim) < new Date())
+
+        return {
+            categoria,
+            metas: metasComStatus,
+            estatisticas: {
+                totalGastosCategoria: valorTotalGastosCategoria,
+                totalMetas: metasComStatus.length,
+                metasAtivas: metasAtivas.length,
+                metasBatidas: metasBatidas.length,
+                metasNaoBatidas: metasNaoBatidas.length,
+                taxaSucesso: metasComStatus.length > 0 ? (metasBatidas.length / metasComStatus.length) * 100 : 0
+            }
+        }
+
+    } catch (error) {
+        console.error("Erro ao buscar metas da categoria:", error)
+        return res.status(500).send({
+            error: "Erro interno do servidor"
+        })
+    }
+})
+
+
 
 // ===== ROTA RAIZ =====
 app.get('/', async () => {

@@ -1,16 +1,12 @@
-import fastify from 'fastify'
-import { db } from './database'
+import { app } from './app'
 
-const app = fastify()
-
-app.get('/', async () => {
-    const tables = await db('sqlite_schema').select('*')
-
-    return tables
-})
+const PORT = 3333
 
 app.listen({
-    port: 3333,
+    port: PORT,
 }).then(() => {
-    console.log('HTTP server running!')
+    console.log('HTTP server running on port:', PORT)
+}).catch((err) => {
+    console.error('Erro ao iniciar servidor:', err)
+    process.exit(1)
 })

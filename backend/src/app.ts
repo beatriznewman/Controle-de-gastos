@@ -1,8 +1,15 @@
 import fastify from 'fastify'
+import cors from '@fastify/cors'
 import { db } from './database'
 import { CreateGastoBody, CreateCategoriaBody, CreateMetaBody, UpdateGastoBody, UpdateCategoriaBody, UpdateMetaBody } from './types'
 
 const app = fastify()
+
+app.register(cors, {
+    origin: '*', // Permite todas as origens. Em produção, use a URL exata do seu frontend: 'http://localhost:5173'
+    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Métodos HTTP permitidos
+    allowedHeaders: ['Content-Type', 'Authorization'] // Headers permitidos
+})
 
 // ===== FUNÇÃO UTILITÁRIA PARA CALCULAR STATUS DAS METAS =====
 

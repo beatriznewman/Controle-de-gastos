@@ -428,11 +428,16 @@ app.get('/metas', async () => {
                 } catch (error) {
                     console.error(`Erro ao calcular status da meta ${meta.id}:`, error)
                     return {
-                        meta,
-                        totalGastos: 0,
+                        id: meta.id,
+                        valor: meta.valor,
+                        data_in: meta.data_in,
+                        data_fim: meta.data_fim,
                         metaBatida: meta.metaBatida,
+                        categoria_nome: meta.categoria_nome,
+                        totalGastos: 0,
                         progresso: 0,
-                        restante: meta.valor
+                        restante: meta.valor,
+                        gastos: []
                     }
                 }
             })
@@ -648,11 +653,16 @@ app.get('/metas/categoria/:categoriaId', async (req, res) => {
                 } catch (error) {
                     console.error(`Erro ao calcular status da meta ${meta.id}:`, error)
                     return {
-                        meta,
-                        totalGastos: 0,
+                        id: meta.id,
+                        valor: meta.valor,
+                        data_in: meta.data_in,
+                        data_fim: meta.data_fim,
                         metaBatida: meta.metaBatida,
+                        categoria_nome: meta.categoria_nome,
+                        totalGastos: 0,
                         progresso: 0,
-                        restante: meta.valor
+                        restante: meta.valor,
+                        gastos: []
                     }
                 }
             })
@@ -665,9 +675,9 @@ app.get('/metas/categoria/:categoriaId', async (req, res) => {
             .first()
 
         const valorTotalGastosCategoria = totalGastosCategoria?.total || 0
-        const metasAtivas = metasComStatus.filter(m => new Date(m.meta.data_fim) >= new Date())
+        const metasAtivas = metasComStatus.filter(m => new Date(m.data_fim) >= new Date())
         const metasBatidas = metasComStatus.filter(m => m.metaBatida)
-        const metasNaoBatidas = metasComStatus.filter(m => !m.metaBatida && new Date(m.meta.data_fim) < new Date())
+        const metasNaoBatidas = metasComStatus.filter(m => !m.metaBatida && new Date(m.data_fim) < new Date())
 
         return {
             categoria,

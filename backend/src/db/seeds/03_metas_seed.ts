@@ -17,6 +17,7 @@ export async function seed(knex: Knex): Promise<void> {
   const alimentacaoId = categorias.find(c => c.titulo === "Alimentação")?.id;
   const transporteId = categorias.find(c => c.titulo === "Transporte")?.id;
   const entretenimentoId = categorias.find(c => c.titulo === "Entretenimento")?.id;
+  const saudeId = categorias.find(c => c.titulo === "Saúde")?.id;
 
   // Encontra um gasto de alimentação para associar à meta
   const gastoAlimentacao = gastos.find(g => g.categ_id === alimentacaoId);
@@ -30,7 +31,7 @@ export async function seed(knex: Knex): Promise<void> {
       .first();
     
     const valorTotalGastos = totalGastos?.total || 0;
-    return valorTotalGastos <= valorMeta;
+    return valorTotalGastos > valorMeta;
   }
 
   // Insere metas de exemplo com cálculo correto
@@ -38,33 +39,48 @@ export async function seed(knex: Knex): Promise<void> {
   const dataFim = "2024-08-31 23:59:59";
 
   const metaAlimentacao = {
-    valor: 500.00,
+    valor: 200.00,
     data_in: dataInicio,
     data_fim: dataFim,
-    metaBatida: await calcularMetaBatida(alimentacaoId!, dataInicio, dataFim, 500.00),
+    metaBatida: await calcularMetaBatida(alimentacaoId!, dataInicio, dataFim, 200.00),
     id_gasto: gastoAlimentacao?.id || null,
     categ_id: alimentacaoId
   };
 
   const metaTransporte = {
-    valor: 300.00,
+    valor: 250.00,
     data_in: dataInicio,
     data_fim: dataFim,
-    metaBatida: await calcularMetaBatida(transporteId!, dataInicio, dataFim, 300.00),
+    metaBatida: await calcularMetaBatida(transporteId!, dataInicio, dataFim, 250.00),
     id_gasto: null,
     categ_id: transporteId
   };
 
   const metaEntretenimento = {
-    valor: 200.00,
+    valor: 60.00,
     data_in: dataInicio,
     data_fim: dataFim,
-    metaBatida: await calcularMetaBatida(entretenimentoId!, dataInicio, dataFim, 200.00),
+    metaBatida: await calcularMetaBatida(entretenimentoId!, dataInicio, dataFim, 60.00),
     id_gasto: null,
     categ_id: entretenimentoId
   };
 
-  await knex("metas").insert([metaAlimentacao, metaTransporte, metaEntretenimento]);
+  // Meta que será ultrapassada (para testar metaBatida = true)
+  const metaSaude = {
+    valor: 100.00,
+    data_in: dataInicio,
+    data_fim: dataFim,
+    metaBatida: await calcularMetaBatida(saudeId!, dataInicio, dataFim, 100.00),
+    id_gasto: null,
+    categ_id: saudeId
+  };
+
+  await knex("metas").insert([metaAlimentacao, metaTransporte, metaEntretenimento, metaSaude]);
 
   console.log("Metas criadas com status calculado baseado nos gastos existentes!");
+  console.log("Cenários de teste:");
+  console.log("- Alimentação: R$ 160,25 gastos vs R$ 200,00 meta (metaBatida = false) ❌");
+  console.log("- Transporte: R$ 200,00 gastos vs R$ 250,00 meta (metaBatida = false) ❌");
+  console.log("- Entretenimento: R$ 47,00 gastos vs R$ 60,00 meta (metaBatida = false) ❌");
+  console.log("- Saúde: R$ 150,00 gastos vs R$ 100,00 meta (metaBatida = true) ✅");
 }

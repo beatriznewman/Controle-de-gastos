@@ -26,8 +26,15 @@ async function calcularStatusMeta(metaId: number) {
             .whereBetween('dataDoGasto', [meta.data_in, meta.data_fim])
             .first()
 
+        // Buscar todos os gastos dentro do período da meta
+        const gastosDaMeta = await db('gastos')
+            .select('id', 'valor', 'dataDoGasto', 'descricao')
+            .where('categ_id', meta.categ_id)
+            .whereBetween('dataDoGasto', [meta.data_in, meta.data_fim])
+            .orderBy('dataDoGasto', 'desc')
+
         const valorTotalGastos = totalGastos?.total || 0
-        const metaBatida = valorTotalGastos <= meta.valor
+        const metaBatida = valorTotalGastos > meta.valor
 
         // Atualizar o status da meta se necessário
         if (meta.metaBatida !== metaBatida) {
@@ -37,11 +44,16 @@ async function calcularStatusMeta(metaId: number) {
         }
 
         return {
-            meta,
-            totalGastos: valorTotalGastos,
+            id: meta.id,
+            valor: meta.valor,
+            data_in: meta.data_in,
+            data_fim: meta.data_fim,
             metaBatida,
+            categoria_nome: meta.categoria_nome,
+            totalGastos: valorTotalGastos,
             progresso: Math.min((valorTotalGastos / meta.valor) * 100, 100),
-            restante: Math.max(meta.valor - valorTotalGastos, 0)
+            restante: metaBatida ? -(valorTotalGastos - meta.valor) : Math.max(meta.valor - valorTotalGastos, 0),
+            gastos: gastosDaMeta
         }
     } catch (error) {
         console.error('Erro ao calcular status da meta:', error)

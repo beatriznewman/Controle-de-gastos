@@ -49,6 +49,24 @@ export async function seed(knex: Knex): Promise<void> {
       dataDoGasto: "2024-08-11 14:15:00",
       descricao: "Consulta médica",
       categ_id: saudeId
+    },
+    {
+      valor: 25.00,
+      dataDoGasto: "2024-08-16 19:30:00",
+      descricao: "Jantar",
+      categ_id: alimentacaoId
+    },
+    {
+      valor: 80.00,
+      dataDoGasto: "2024-08-17 10:00:00",
+      descricao: "Uber",
+      categ_id: transporteId
+    },
+    {
+      valor: 15.00,
+      dataDoGasto: "2024-08-18 16:00:00",
+      descricao: "Sorvete",
+      categ_id: entretenimentoId
     }
   ]);
 }

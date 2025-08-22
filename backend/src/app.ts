@@ -1,15 +1,8 @@
 import fastify from 'fastify'
-import cors from '@fastify/cors'
 import { db } from './database'
 import { CreateGastoBody, CreateCategoriaBody, CreateMetaBody, UpdateGastoBody, UpdateCategoriaBody, UpdateMetaBody } from './types'
 
 const app = fastify()
-
-app.register(cors, {
-    origin: '*', // Permite todas as origens. Em produção, use a URL exata do seu frontend: 'http://localhost:5173'
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Métodos HTTP permitidos
-    allowedHeaders: ['Content-Type', 'Authorization'] // Headers permitidos
-})
 
 // ===== FUNÇÃO UTILITÁRIA PARA CALCULAR STATUS DAS METAS =====
 
@@ -33,8 +26,15 @@ async function calcularStatusMeta(metaId: number) {
             .whereBetween('dataDoGasto', [meta.data_in, meta.data_fim])
             .first()
 
+        // Buscar todos os gastos dentro do período da meta
+        const gastosDaMeta = await db('gastos')
+            .select('id', 'valor', 'dataDoGasto', 'descricao')
+            .where('categ_id', meta.categ_id)
+            .whereBetween('dataDoGasto', [meta.data_in, meta.data_fim])
+            .orderBy('dataDoGasto', 'desc')
+
         const valorTotalGastos = totalGastos?.total || 0
-        const metaBatida = valorTotalGastos <= meta.valor
+        const metaBatida = valorTotalGastos > meta.valor
 
         // Atualizar o status da meta se necessário
         if (meta.metaBatida !== metaBatida) {
@@ -44,11 +44,16 @@ async function calcularStatusMeta(metaId: number) {
         }
 
         return {
-            meta,
-            totalGastos: valorTotalGastos,
+            id: meta.id,
+            valor: meta.valor,
+            data_in: meta.data_in,
+            data_fim: meta.data_fim,
             metaBatida,
+            categoria_nome: meta.categoria_nome,
+            totalGastos: valorTotalGastos,
             progresso: Math.min((valorTotalGastos / meta.valor) * 100, 100),
-            restante: Math.max(meta.valor - valorTotalGastos, 0)
+            restante: metaBatida ? -(valorTotalGastos - meta.valor) : Math.max(meta.valor - valorTotalGastos, 0),
+            gastos: gastosDaMeta
         }
     } catch (error) {
         console.error('Erro ao calcular status da meta:', error)
@@ -423,11 +428,16 @@ app.get('/metas', async () => {
                 } catch (error) {
                     console.error(`Erro ao calcular status da meta ${meta.id}:`, error)
                     return {
-                        meta,
-                        totalGastos: 0,
+                        id: meta.id,
+                        valor: meta.valor,
+                        data_in: meta.data_in,
+                        data_fim: meta.data_fim,
                         metaBatida: meta.metaBatida,
+                        categoria_nome: meta.categoria_nome,
+                        totalGastos: 0,
                         progresso: 0,
-                        restante: meta.valor
+                        restante: meta.valor,
+                        gastos: []
                     }
                 }
             })
@@ -643,11 +653,16 @@ app.get('/metas/categoria/:categoriaId', async (req, res) => {
                 } catch (error) {
                     console.error(`Erro ao calcular status da meta ${meta.id}:`, error)
                     return {
-                        meta,
-                        totalGastos: 0,
+                        id: meta.id,
+                        valor: meta.valor,
+                        data_in: meta.data_in,
+                        data_fim: meta.data_fim,
                         metaBatida: meta.metaBatida,
+                        categoria_nome: meta.categoria_nome,
+                        totalGastos: 0,
                         progresso: 0,
-                        restante: meta.valor
+                        restante: meta.valor,
+                        gastos: []
                     }
                 }
             })
@@ -660,9 +675,9 @@ app.get('/metas/categoria/:categoriaId', async (req, res) => {
             .first()
 
         const valorTotalGastosCategoria = totalGastosCategoria?.total || 0
-        const metasAtivas = metasComStatus.filter(m => new Date(m.meta.data_fim) >= new Date())
+        const metasAtivas = metasComStatus.filter(m => new Date(m.data_fim) >= new Date())
         const metasBatidas = metasComStatus.filter(m => m.metaBatida)
-        const metasNaoBatidas = metasComStatus.filter(m => !m.metaBatida && new Date(m.meta.data_fim) < new Date())
+        const metasNaoBatidas = metasComStatus.filter(m => !m.metaBatida && new Date(m.data_fim) < new Date())
 
         return {
             categoria,

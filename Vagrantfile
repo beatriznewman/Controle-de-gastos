@@ -5,6 +5,30 @@ Vagrant.configure("2") do |config|
   # Aumenta tolerância de boot com operações pesadas
   config.vm.boot_timeout = 600
 
+  # Mensagens de feedback no ciclo de vida (principalmente para frontend)
+  config.trigger.before :up do |t|
+    t.only_on = ["frontend"]
+    t.info = "[frontend] Iniciando VM... isso pode levar alguns minutos."
+  end
+
+  config.trigger.after :up do |t|
+    t.only_on = ["frontend"]
+    t.info = "[frontend] VM pronta. Iniciando provisionamento/serviços."
+  end
+
+  config.trigger.after :provision do |t|
+    t.only_on = ["frontend"]
+    t.info = "[frontend] Provisionamento concluído. Verifique os logs: /var/log/frontend.log"
+  end
+
+  # Mensagem final com endpoints úteis
+  config.vm.post_up_message = <<-MSG
+Projeto no ar:
+  Proxy:        http://localhost:8081
+  Frontend:     http://192.168.56.11:5173
+  Backend API:  http://192.168.57.11:3333
+MSG
+
   # ---------- VM1 - Proxy ----------
   config.vm.define "proxy" do |proxy|
     proxy.vm.hostname = "proxy"
@@ -95,43 +119,61 @@ NGINX
       echo "Node.js version: $(node --version)"
       echo "npm version: $(npm --version)"
 
-      # Detectar interface da rede 192.168.56.0/24 e 192.168.57.0/24 e configurar Netplan
+      # Configurar Netplan preservando NAT (SSH) e redes privadas
+      NAT_IFACE=$(ip route | awk '/^default/ {print $5; exit}')
       IFACE56=$(ip -o -4 addr list | awk '/192.168.56\./ {print $2; exit}')
       IFACE57=$(ip -o -4 addr list | awk '/192.168.57\./ {print $2; exit}')
-      if [ -n "$IFACE56" ] && [ -n "$IFACE57" ]; then
+      if [ -n "$NAT_IFACE" ]; then
+        # Fase 1: com internet (NAT ativo) para instalar dependências
         cat > /etc/netplan/01-config.yaml <<NETPLAN
 network:
   version: 2
   ethernets:
+    ${NAT_IFACE}:
+      dhcp4: true
+NETPLAN
+        if [ -n "$IFACE56" ]; then
+          cat >> /etc/netplan/01-config.yaml <<NETPLAN
     ${IFACE56}:
       dhcp4: no
       addresses:
         - 192.168.56.11/24
+NETPLAN
+        fi
+        if [ -n "$IFACE57" ]; then
+          cat >> /etc/netplan/01-config.yaml <<NETPLAN
     ${IFACE57}:
       dhcp4: no
       addresses:
         - 192.168.57.10/24
 NETPLAN
+        fi
         netplan apply
       fi
 
       # Instalar dependências (copiar para diretório local para evitar problemas de symlink)
       cp -r /vagrant/frontend /home/vagrant/frontend-local
       cd /home/vagrant/frontend-local
-      npm install --no-optional
+      # Corrigir permissões e reinstalar como usuário vagrant
+      chown -R vagrant:vagrant /home/vagrant/frontend-local
+      rm -rf node_modules package-lock.json || true
+      sudo -u vagrant npm ci || sudo -u vagrant npm install
 
       # Criar serviço systemd para o frontend
       sudo bash -c 'cat > /etc/systemd/system/frontend.service <<EOF
 [Unit]
 Description=Vite Frontend Dev Server
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/home/vagrant/frontend-local
+Environment=PATH=/usr/local/bin:/usr/bin
 Environment=NODE_ENV=development
-ExecStart=/usr/bin/npm run dev
+ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0
 Restart=always
+RestartSec=2
 User=vagrant
 StandardOutput=append:/var/log/frontend.log
 StandardError=append:/var/log/frontend.log
@@ -143,22 +185,41 @@ EOF'
       sudo systemctl daemon-reload
       sudo systemctl enable frontend
       sudo systemctl restart frontend || sudo systemctl start frontend
-      
-      # Remover NAT temporário após instalação completa
-      echo "Removendo NAT temporário para manter arquitetura de segurança..."
-      # Criar script para remover NAT na próxima reinicialização
-      sudo bash -c 'cat > /etc/rc.local <<EOF
-#!/bin/bash
-# Remover NAT temporário após instalação
-if [ -f /tmp/nat_removal_needed ]; then
-  echo "Removendo NAT temporário..."
-  # O NAT será removido quando a VM for reiniciada
-  rm -f /tmp/nat_removal_needed
-fi
-exit 0
-EOF'
-      sudo chmod +x /etc/rc.local
-      touch /tmp/nat_removal_needed
+
+      # Fase 2: desativar rota/DNS da NAT para manter arquitetura (sem perder SSH)
+      NAT_IFACE=$(ip route | awk '/^default/ {print $5; exit}')
+      IFACE56=$(ip -o -4 addr list | awk '/192.168.56\./ {print $2; exit}')
+      IFACE57=$(ip -o -4 addr list | awk '/192.168.57\./ {print $2; exit}')
+      if [ -n "$NAT_IFACE" ]; then
+        cat > /etc/netplan/01-config.yaml <<NETPLAN
+network:
+  version: 2
+  ethernets:
+    ${NAT_IFACE}:
+      dhcp4: true
+      dhcp4-overrides:
+        use-routes: false
+        use-dns: false
+      optional: true
+NETPLAN
+        if [ -n "$IFACE56" ]; then
+          cat >> /etc/netplan/01-config.yaml <<NETPLAN
+    ${IFACE56}:
+      dhcp4: no
+      addresses:
+        - 192.168.56.11/24
+NETPLAN
+        fi
+        if [ -n "$IFACE57" ]; then
+          cat >> /etc/netplan/01-config.yaml <<NETPLAN
+    ${IFACE57}:
+      dhcp4: no
+      addresses:
+        - 192.168.57.10/24
+NETPLAN
+        fi
+        netplan apply || true
+      fi
     SHELL
   end
 
@@ -189,18 +250,26 @@ EOF'
       echo "Node.js version: $(node --version)"
       echo "npm version: $(npm --version)"
 
-      # Detectar interface da rede 192.168.57.0/24 e configurar Netplan
+      # Configurar Netplan preservando NAT (SSH) e rede privada
+      NAT_IFACE=$(ip route | awk '/^default/ {print $5; exit}')
       IFACE=$(ip -o -4 addr list | awk '/192.168.57\./ {print $2; exit}')
-      if [ -n "$IFACE" ]; then
+      if [ -n "$NAT_IFACE" ]; then
+        # Fase 1: com internet (NAT ativo) para instalar dependências
         cat > /etc/netplan/01-config.yaml <<NETPLAN
 network:
   version: 2
   ethernets:
+    ${NAT_IFACE}:
+      dhcp4: true
+NETPLAN
+        if [ -n "$IFACE" ]; then
+          cat >> /etc/netplan/01-config.yaml <<NETPLAN
     ${IFACE}:
       dhcp4: no
       addresses:
         - 192.168.57.11/24
 NETPLAN
+        fi
         netplan apply
       fi
 
@@ -234,22 +303,32 @@ EOF'
       sudo systemctl daemon-reload
       sudo systemctl enable backend
       sudo systemctl restart backend || sudo systemctl start backend
-      
-      # Remover NAT temporário após instalação completa
-      echo "Removendo NAT temporário para manter arquitetura de segurança..."
-      # Criar script para remover NAT na próxima reinicialização
-      sudo bash -c 'cat > /etc/rc.local <<EOF
-#!/bin/bash
-# Remover NAT temporário após instalação
-if [ -f /tmp/nat_removal_needed ]; then
-  echo "Removendo NAT temporário..."
-  # O NAT será removido quando a VM for reiniciada
-  rm -f /tmp/nat_removal_needed
-fi
-exit 0
-EOF'
-      sudo chmod +x /etc/rc.local
-      touch /tmp/nat_removal_needed
+
+      # Fase 2: desativar rota/DNS da NAT para manter arquitetura (sem perder SSH)
+      NAT_IFACE=$(ip route | awk '/^default/ {print $5; exit}')
+      IFACE=$(ip -o -4 addr list | awk '/192.168.57\./ {print $2; exit}')
+      if [ -n "$NAT_IFACE" ]; then
+        cat > /etc/netplan/01-config.yaml <<NETPLAN
+network:
+  version: 2
+  ethernets:
+    ${NAT_IFACE}:
+      dhcp4: true
+      dhcp4-overrides:
+        use-routes: false
+        use-dns: false
+      optional: true
+NETPLAN
+        if [ -n "$IFACE" ]; then
+          cat >> /etc/netplan/01-config.yaml <<NETPLAN
+    ${IFACE}:
+      dhcp4: no
+      addresses:
+        - 192.168.57.11/24
+NETPLAN
+        fi
+        netplan apply || true
+      fi
     SHELL
   end
 end

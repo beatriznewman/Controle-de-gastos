@@ -35,7 +35,98 @@ cloud/
 
 ## 🚀 Como executar o projeto
 
-### Pré-requisitos
+### Opção 1: Usando Vagrant (Recomendado)
+
+#### Pré-requisitos
+- [Vagrant](https://www.vagrantup.com/downloads) (versão 2.0 ou superior)
+- [VirtualBox](https://www.virtualbox.org/wiki/Downloads) (versão 6.0 ou superior)
+
+#### Execução
+```bash
+# Iniciar todo o projeto com um comando
+./start-project.sh
+
+# Ou manualmente:
+vagrant up
+```
+
+Após a inicialização, acesse: **http://localhost:8082**
+
+#### Arquitetura Vagrant
+
+O projeto implementa uma arquitetura de 3 camadas com isolamento de rede:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    HOST (localhost:8082)                   │
+│                     ↕ (apenas com proxy)                   │
+└─────────────────────────────────────────────────────────────┘
+                                ↕
+┌─────────────────────────────────────────────────────────────┐
+│  PROXY VM (192.168.56.10)                                  │
+│  • NAT padrão (internet)                                   │
+│  • Rede: proxy_net (192.168.56.x)                         │
+│  • Comunica: HOST + FRONTEND                               │
+└─────────────────────────────────────────────────────────────┘
+                                ↕
+┌─────────────────────────────────────────────────────────────┐
+│  FRONTEND VM (192.168.56.11 + 192.168.57.10)              │
+│  • Rede 1: proxy_net (com proxy)                           │
+│  • Rede 2: frontend_net (com backend)                      │
+│  • Comunica: PROXY + BACKEND                               │
+└─────────────────────────────────────────────────────────────┘
+                                ↕
+┌─────────────────────────────────────────────────────────────┐
+│  BACKEND VM (192.168.57.11)                                │
+│  • Rede: frontend_net (192.168.57.x)                      │
+│  • Comunica: APENAS FRONTEND                               │
+│  • NÃO comunica com PROXY                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Detalhes das VMs (ordem de inicialização):**
+1. **Proxy (192.168.56.10)**: Nginx como proxy reverso, único ponto de acesso externo (2GB RAM)
+2. **Backend (192.168.57.11)**: API Fastify na porta 3333, isolado do mundo externo (3GB RAM)
+3. **Frontend (192.168.56.11)**: React/Vite na porta 5173, conecta com proxy e backend (3GB RAM)
+
+**Fluxo de Comunicação:**
+1. Cliente → Proxy (localhost:8082 → 192.168.56.10:80)
+2. Proxy → Frontend (192.168.56.10 → 192.168.56.11:5173)
+3. Frontend → Backend (192.168.57.10 → 192.168.57.11:3333)
+
+**Matriz de Conectividade:**
+| Origem | Destino | Rede | Status |
+|--------|---------|------|--------|
+| localhost:8082 | Proxy | forwarded_port | ✅ |
+| Proxy | Internet | NAT padrão | ✅ |
+| Proxy | Frontend | proxy_net | ✅ |
+| Frontend | Proxy | proxy_net | ✅ |
+| Frontend | Backend | frontend_net | ✅ |
+| Backend | Frontend | frontend_net | ✅ |
+| Backend | Proxy | ❌ | ✅ (Bloqueado) |
+
+#### Comandos úteis do Vagrant
+```bash
+vagrant status          # Ver status das VMs
+vagrant ssh proxy       # Conectar ao proxy
+vagrant ssh frontend    # Conectar ao frontend  
+vagrant ssh backend     # Conectar ao backend
+vagrant halt            # Parar todas as VMs
+vagrant destroy         # Destruir todas as VMs
+```
+
+#### Verificar logs
+```bash
+# Backend
+vagrant ssh backend -c 'tail -f /var/log/backend.log'
+
+# Frontend  
+vagrant ssh frontend -c 'tail -f /var/log/frontend.log'
+```
+
+### Opção 2: Desenvolvimento Local
+
+#### Pré-requisitos
 - Node.js (versão 18 ou superior)
 - npm ou yarn
 

@@ -1,7 +1,10 @@
 import axios from 'axios'
 
-const api = axios.create({
-  baseURL: 'http://localhost:3333',
-});
+// Usa proxy do Vite quando em dev (Vagrant/host) e caminho absoluto em prod
+const baseURL = import.meta.env.PROD ? '/api' : '/api'
 
-export default api;
+const api = axios.create({
+  baseURL,
+})
+
+export default api

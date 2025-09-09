@@ -269,7 +269,7 @@ SCRIPT
     backend.vm.hostname = "backend"
     
     # CONFIGURAÇÃO DE REDE:
-    # - NAT padrão: Internet para instalação (removida na Fase 2)
+    # - NAT padrão: Internet para instalação (removível manualmente)
     # - Rede backend_net: Comunicação APENAS com frontend (192.168.57.x)
     # - virtualbox__intnet: Rede interna, completamente isolada do host
     backend.vm.network "private_network", ip: "192.168.57.11", virtualbox__intnet: "backend_net"
@@ -277,47 +277,38 @@ SCRIPT
     # RECURSOS DA VM
     backend.vm.provider "virtualbox" do |vb|
       vb.name = "vm-backend"
-      vb.memory = 1024       # RAM para Node.js + SQLite
+      vb.memory = 1024      # RAM para Node.js + SQLite
       vb.cpus = 2           # Multi-core para API
     end
 
     # =====================================================================
     # FASE 1: INSTALAÇÃO DE DEPENDÊNCIAS E BANCO (COM INTERNET)
     # =====================================================================
-    # Instala Node.js, copia projeto, instala dependências e configura DB
-    # Requer NAT ativa para baixar pacotes da internet
-    # =====================================================================
     
     backend.vm.provision "shell", name: "install_dependencies", inline: <<-SHELL
-      set -e  # Parar execução em caso de erro
-      
+      set -e
       echo "🔄 Fase 1: Instalando dependências do Backend..."
       
-      # Instalar Node.js 22 LTS via NodeSource
-      echo "📦 Instalando Node.js 22..."
+      echo "📦 Instalando Node.js 22 e utilitário 'at'..."
       apt-get update -y
       curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-      apt-get install -y nodejs
-      
+      apt-get install -y nodejs at
+
       echo "Node.js: $(node --version)"
       echo "npm: $(npm --version)"
 
-      # Copiar projeto para diretório local (evita problemas de symlink)
       echo "📁 Copiando projeto para diretório local..."
       cp -r /vagrant/backend /home/vagrant/backend-local
       cd /home/vagrant/backend-local
       chown -R vagrant:vagrant /home/vagrant/backend-local
       
-      # Instalar dependências npm
       echo "📦 Instalando dependências npm..."
       sudo -u vagrant npm install
       
-      # Configurar banco de dados
       echo "🗄️ Configurando banco de dados..."
-      sudo -u vagrant npm run migrate    # Criar tabelas
-      sudo -u vagrant npm run seed       # Inserir dados iniciais
+      sudo -u vagrant npm run migrate
+      sudo -u vagrant npm run seed
 
-      # Criar serviço systemd para execução automática
       echo "⚙️ Configurando serviço systemd..."
       cat > /etc/systemd/system/backend.service <<EOF
 [Unit]
@@ -337,33 +328,23 @@ StandardError=append:/var/log/backend.log
 [Install]
 WantedBy=multi-user.target
 EOF
-
       systemctl daemon-reload
       systemctl enable backend
-      
       echo "✅ Fase 1 concluída: Backend e banco configurados!"
     SHELL
 
     # =====================================================================
     # FASE 2: PREPARAR ISOLAMENTO MÁXIMO (CRIA SCRIPT PARA APLICAR DEPOIS)
     # =====================================================================
-    # Cria script que será executado após o Vagrant terminar
-    # Evita timeout do Vagrant durante remoção da NAT
-    # =====================================================================
     
     backend.vm.provision "shell", name: "prepare_isolation", inline: <<-SHELL
-      set -e  # Parar execução em caso de erro
-      
+      set -e
       echo "🔒 Fase 2: Preparando isolamento máximo..."
       
-      # Criar script para aplicar isolamento após provisionamento
       cat > /home/vagrant/apply_network_isolation.sh <<'SCRIPT'
 #!/bin/bash
 set -e
-
 echo "🌐 Aplicando isolamento máximo..."
-
-# Configurar netplan removendo interface NAT
 cat > /etc/netplan/01-network.yaml <<EOF
 network:
   version: 2
@@ -373,34 +354,23 @@ network:
       addresses:
         - 192.168.57.11/24
 EOF
-
-# Aplicar nova configuração de rede
 netplan apply
-
 echo "✅ Isolamento máximo aplicado com sucesso!"
 SCRIPT
-
       chmod +x /home/vagrant/apply_network_isolation.sh
-      
       echo "✅ Fase 2 concluída: Script de isolamento preparado!"
     SHELL
 
     # =====================================================================
-    # FASE 3: FINALIZAÇÃO (INICIA SERVIÇOS COM REDE AINDA ATIVA)
-    # =====================================================================
-    # Inicia serviços enquanto Vagrant ainda tem conectividade
+    # FASE 3: FINALIZAÇÃO (INICIA SERVIÇOS DE FORMA SEGURA E SEM TIMEOUT)
     # =====================================================================
     
-    backend.vm.provision "shell", name: "start_services", inline: <<-SHELL
-      set -e  # Parar execução em caso de erro
+    backend.vm.provision "shell", name: "start_services_safely", inline: <<-SHELL
+      set -e
+      echo "🚀 Fase 3: Agendando início do serviço do Backend para evitar timeout..."
+      echo "systemctl start backend" | at now
       
-      echo "🚀 Fase 3: Iniciando serviços do Backend..."
-      
-      # Iniciar serviço backend
-      systemctl start backend
-      
-      echo "✅ Backend configurado e funcionando!"
-      echo "   - Serviço ativo: ✅"
+      echo "✅ Serviço do Backend agendado para iniciar."
       echo "   - Para aplicar isolamento: vagrant ssh backend -c 'sudo /home/vagrant/apply_network_isolation.sh'"
     SHELL
     

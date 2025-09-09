@@ -13,25 +13,46 @@ Dessa maneira, a aplicação será útil para registrar os gastos e assim ter um
 
 ## Estrutura do Projeto
 
-O projeto está organizado em duas partes principais:
+O projeto está organizado com arquitetura de microsserviços executada via Vagrant:
 
 ```
-cloud/
-├── backend/          # API REST com Fastify + SQLite
+Controle-de-gastos/
+├── backend/                    # 🔧 API REST com Fastify + SQLite
 │   ├── src/
-│   │   ├── app.ts           # Aplicação principal com todas as rotas
-│   │   ├── server.ts        # Servidor HTTP
-│   │   ├── database.ts      # Configuração do banco de dados
-│   │   ├── types/           # Definições de tipos TypeScript
+│   │   ├── app.ts             # Aplicação principal com todas as rotas
+│   │   ├── server.ts          # Servidor HTTP
+│   │   ├── database.ts        # Configuração do banco de dados
+│   │   ├── types/             # Definições de tipos TypeScript
 │   │   └── db/
-│   │       ├── migrations/  # Migrações do banco de dados
-│   │       ├── seeds/       # Dados iniciais
-│   │       └── app-data.db  # Banco SQLite (não versionado)
-│   ├── knexfile.ts          # Configuração do Knex.js
-│   └── package.json         # Dependências do backend
-├── frontend/         # Interface do usuário (em desenvolvimento)
-└── README.md         # Este arquivo
+│   │       ├── migrations/    # Migrações do banco de dados
+│   │       ├── seeds/         # Dados iniciais
+│   │       └── app-data.db    # Banco SQLite (não versionado)
+│   ├── knexfile.ts            # Configuração do Knex.js
+│   ├── package.json           # Dependências do backend
+│   └── README.md              # Documentação do backend
+├── frontend/                   # 🎨 Interface React/Vite
+│   ├── src/
+│   │   ├── components/        # Componentes React
+│   │   │   ├── CategoriaManager.tsx
+│   │   │   ├── GastoManager.tsx
+│   │   │   └── MetaManager.tsx
+│   │   ├── services/
+│   │   │   └── api.ts         # Cliente HTTP (Axios)
+│   │   ├── App.tsx            # Componente principal
+│   │   └── main.tsx           # Entry point
+│   ├── vite.config.ts         # Configuração do Vite (proxy para backend)
+│   ├── package.json           # Dependências do frontend
+│   └── README.md              # Documentação do frontend
+├── Vagrantfile                 # 🚀 Configuração das 3 VMs (Proxy + Frontend + Backend)
+├── VAGRANT.md                  # 📖 Guia detalhado do Vagrant
+└── README.md                   # 📋 Documentação principal
 ```
+
+### 🏗️ **Arquitetura de Deployment:**
+
+- **VM1 (Proxy)**: Nginx como proxy reverso e gateway único
+- **VM2 (Frontend)**: Servidor Vite isolado da internet
+- **VM3 (Backend)**: API Fastify + SQLite com isolamento máximo
 
 ## 🚀 Como executar o projeto
 
@@ -40,88 +61,116 @@ cloud/
 #### Pré-requisitos
 - [Vagrant](https://www.vagrantup.com/downloads) (versão 2.0 ou superior)
 - [VirtualBox](https://www.virtualbox.org/wiki/Downloads) (versão 6.0 ou superior)
+- **Mínimo 4GB RAM livres** (total 8GB RAM recomendados)
 
 #### Execução
 ```bash
 # Iniciar todo o projeto com um comando
-./start-project.sh
-
-# Ou manualmente:
 vagrant up
+
+# Ver status das VMs
+vagrant status
+
+# Ver logs em tempo real (opcional)
+vagrant ssh frontend -c 'tail -f /var/log/frontend.log'
+vagrant ssh backend -c 'tail -f /var/log/backend.log'
 ```
 
-Após a inicialização, acesse: **http://localhost:8082**
+⏱️ **Tempo de primeira execução**: 15-20 minutos (download + instalação)
+
+🎯 **Após a inicialização**: **http://localhost:8081** (único acesso)
 
 #### Arquitetura Vagrant
 
-O projeto implementa uma arquitetura de 3 camadas com isolamento de rede:
+O projeto implementa uma arquitetura de 3 camadas com isolamento de rede progressivo:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    HOST (localhost:8082)                   │
-│                     ↕ (apenas com proxy)                   │
+│                    HOST (localhost:8081)                   │
+│                     ↕ (proxy reverso)                      │
 └─────────────────────────────────────────────────────────────┘
                                 ↕
 ┌─────────────────────────────────────────────────────────────┐
-│  PROXY VM (192.168.56.10)                                  │
-│  • NAT padrão (internet)                                   │
-│  • Rede: proxy_net (192.168.56.x)                         │
-│  • Comunica: HOST + FRONTEND                               │
+│  VM1: PROXY (192.168.56.10)                               │
+│  • Conexão: Host + Internet + Frontend                     │
+│  • Nginx como gateway único                                │
 └─────────────────────────────────────────────────────────────┘
                                 ↕
 ┌─────────────────────────────────────────────────────────────┐
-│  FRONTEND VM (192.168.56.11 + 192.168.57.10)              │
-│  • Rede 1: proxy_net (com proxy)                           │
-│  • Rede 2: frontend_net (com backend)                      │
-│  • Comunica: PROXY + BACKEND                               │
+│  VM2: FRONTEND (192.168.56.11 + 192.168.57.10)           │
+│  • Conexão: Proxy + Backend                               │
+│  • Internet: Removida após provisionamento                 │
 └─────────────────────────────────────────────────────────────┘
                                 ↕
 ┌─────────────────────────────────────────────────────────────┐
-│  BACKEND VM (192.168.57.11)                                │
-│  • Rede: frontend_net (192.168.57.x)                      │
-│  • Comunica: APENAS FRONTEND                               │
-│  • NÃO comunica com PROXY                                  │
+│  VM3: BACKEND (192.168.57.11)                             │
+│  • Conexão: APENAS Frontend                               │
+│  • Internet: Removida após provisionamento                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Detalhes das VMs (ordem de inicialização):**
-1. **Proxy (192.168.56.10)**: Nginx como proxy reverso, único ponto de acesso externo (2GB RAM)
-2. **Backend (192.168.57.11)**: API Fastify na porta 3333, isolado do mundo externo (3GB RAM)
-3. **Frontend (192.168.56.11)**: React/Vite na porta 5173, conecta com proxy e backend (3GB RAM)
+**Processo de Provisionamento (3 Fases):**
 
-**Fluxo de Comunicação:**
-1. Cliente → Proxy (localhost:8082 → 192.168.56.10:80)
-2. Proxy → Frontend (192.168.56.10 → 192.168.56.11:5173)
-3. Frontend → Backend (192.168.57.10 → 192.168.57.11:3333)
+1. **Fase 1 - Instalação**: Todas as VMs com NAT para instalar dependências
+   - 📦 Instala Node.js 22, dependências npm
+   - 🗄️ Configura banco de dados (migrate + seed)
+   - ⚙️ Cria serviços systemd
 
-**Matriz de Conectividade:**
-| Origem | Destino | Rede | Status |
-|--------|---------|------|--------|
-| localhost:8082 | Proxy | forwarded_port | ✅ |
-| Proxy | Internet | NAT padrão | ✅ |
-| Proxy | Frontend | proxy_net | ✅ |
-| Frontend | Proxy | proxy_net | ✅ |
-| Frontend | Backend | frontend_net | ✅ |
-| Backend | Frontend | frontend_net | ✅ |
-| Backend | Proxy | ❌ | ✅ (Bloqueado) |
+2. **Fase 2 - Preparação**: Cria scripts de isolamento (sem aplicar)
+   - 🔒 VM2 (Frontend): Prepara script para remover NAT
+   - 🔒 VM3 (Backend): Prepara script para remover NAT
+
+3. **Fase 3 - Finalização**: Inicia serviços com rede ativa
+   - 🚀 Sistema funcionando sem isolamento ainda
+
+**Aplicar Isolamento Manual (após vagrant up):**
+```bash
+vagrant ssh frontend -c 'sudo /home/vagrant/apply_network_isolation.sh'
+vagrant ssh backend -c 'sudo /home/vagrant/apply_network_isolation.sh'
+```
+
+**Matriz de Conectividade Final (Isolamento Completo):**
+| De → Para | Host | Internet | Proxy | Frontend | Backend |
+|-----------|------|----------|-------|----------|---------|
+| Host | - | ✅ | ✅ (8081) | ❌ **BLOQUEADO** | ❌ **BLOQUEADO** |
+| Proxy | ✅ | ✅ | - | ✅ | ❌ |
+| Frontend | ❌ | ❌ **SEM NAT** | ✅ | - | ✅ |
+| Backend | ❌ | ❌ **SEM NAT** | ❌ | ✅ | - |
+
+⚠️ **Segurança**: Frontend e Backend são completamente isolados do host e internet.
 
 #### Comandos úteis do Vagrant
 ```bash
+# Gerenciamento básico
 vagrant status          # Ver status das VMs
+vagrant up              # Iniciar todas as VMs
+vagrant halt            # Parar todas as VMs
+vagrant destroy         # Destruir todas as VMs (limpa tudo)
+
+# Acesso SSH às VMs
 vagrant ssh proxy       # Conectar ao proxy
 vagrant ssh frontend    # Conectar ao frontend  
 vagrant ssh backend     # Conectar ao backend
-vagrant halt            # Parar todas as VMs
-vagrant destroy         # Destruir todas as VMs
+
+# Provisionamento específico
+vagrant provision       # Re-executar provisionamento
+vagrant up --provision  # Iniciar com provisionamento forçado
 ```
 
-#### Verificar logs
+#### Monitoramento e logs
 ```bash
-# Backend
+# Logs em tempo real
 vagrant ssh backend -c 'tail -f /var/log/backend.log'
-
-# Frontend  
 vagrant ssh frontend -c 'tail -f /var/log/frontend.log'
+
+# Status dos serviços
+vagrant ssh backend -c 'systemctl status backend'
+vagrant ssh frontend -c 'systemctl status frontend'
+
+# Verificar isolamento de rede
+vagrant ssh frontend -c 'ping -c 2 8.8.8.8'  # Deve falhar
+vagrant ssh backend -c 'ping -c 2 8.8.8.8'   # Deve falhar
+vagrant ssh proxy -c 'ping -c 2 8.8.8.8'     # Deve funcionar
 ```
 
 ### Opção 2: Desenvolvimento Local

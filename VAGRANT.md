@@ -1,6 +1,6 @@
 # 🐳 Guia do Vagrant - Controle de Gastos
 
-Este guia explica como usar o Vagrant para executar o projeto completo de Controle de Gastos.
+Este guia explica como usar o Vagrant para executar o projeto completo de Controle de Gastos com arquitetura de rede isolada.
 
 ## 📋 Pré-requisitos
 
@@ -21,26 +21,39 @@ cd Controle-de-gastos
 
 # Iniciar tudo com um comando
 vagrant up
+
+# Acompanhar progresso (opcional)
+vagrant up --debug  # Para logs detalhados
 ```
 
-## 🏗️ Arquitetura das VMs
+⏱️ **Tempo esperado**: 15-20 minutos na primeira execução
+💾 **RAM necessária**: Mínimo 4GB livres (8GB total recomendados)
 
-### VM1: Proxy (192.168.56.10)
+## 🏗️ Arquitetura de Rede Isolada
+
+### VM1: Proxy Reverso (192.168.56.10)
 - **Função**: Nginx como proxy reverso
 - **Porta**: 80 → 8081 (host)
-- **Rede**: Conecta com frontend via `proxy_net`
+- **Conectividade**: 
+  - ✅ Host (localhost:8081)
+  - ✅ Internet (NAT)
+  - ✅ Frontend (192.168.56.11)
 
-### VM2: Frontend (192.168.56.11)
-- **Função**: React/Vite
+### VM2: Frontend (192.168.56.11 + 192.168.57.10)
+- **Função**: React/Vite dev server
 - **Porta**: 5173
-- **Redes**: 
-  - `proxy_net` (com proxy)
-  - `frontend_net` (com backend)
+- **Conectividade**:
+  - ✅ Proxy (192.168.56.10)
+  - ✅ Backend (192.168.57.11)
+  - ❌ Internet (removida após provisionamento)
 
 ### VM3: Backend (192.168.57.11)
 - **Função**: API Fastify + SQLite
 - **Porta**: 3333
-- **Rede**: `frontend_net` (com frontend)
+- **Conectividade**:
+  - ✅ Frontend (192.168.57.10)
+  - ❌ Proxy (isolado)
+  - ❌ Internet (removida após provisionamento)
 
 ## 🔧 Comandos Úteis
 
@@ -89,46 +102,137 @@ vagrant ssh proxy -c 'tail -f /var/log/nginx/access.log'
 
 Após `vagrant up`, você pode acessar:
 
-- **Aplicação Principal**: http://localhost:8081
-- **Frontend Direto**: http://192.168.56.11:5173
-- **Backend API**: http://192.168.57.11:3333
+- **Aplicação Principal**: http://localhost:8081 (**ÚNICO ACESSO PERMITIDO**)
+
+⚠️ **IMPORTANTE**: Acessos diretos às VMs foram **REMOVIDOS** por segurança:
+- ❌ `http://192.168.56.11:5173` (Frontend direto - BLOQUEADO)
+- ❌ `http://192.168.57.11:3333` (Backend direto - BLOQUEADO)
+
+## 🔒 Isolamento de Rede
+
+### Processo de Provisionamento Detalhado
+
+O Vagrant executa 3 fases sequenciais em cada VM:
+
+#### **Fase 1: Instalação de Dependências (COM Internet)**
+- 📦 **Proxy**: Instala e configura Nginx
+- 📦 **Frontend**: Instala Node.js 22 + dependências npm + configura serviço systemd
+- 📦 **Backend**: Instala Node.js 22 + dependências npm + migrate/seed DB + configura serviço systemd
+
+#### **Fase 2: Preparação do Isolamento**
+- 🔒 **Proxy**: Mantém NAT (gateway de acesso)
+- 🔒 **Frontend**: Cria script de isolamento (não aplica ainda)
+- 🔒 **Backend**: Cria script de isolamento (não aplica ainda)
+
+#### **Fase 3: Finalização (Inicia Serviços)**
+- 🚀 **Todas VMs**: Inicia serviços com rede ainda ativa
+- ✅ **Resultado**: Sistema funcionando SEM isolamento aplicado
+
+### 🔒 Aplicar Isolamento Manual
+
+Após `vagrant up`, execute para isolamento completo:
+```bash
+vagrant ssh frontend -c 'sudo /home/vagrant/apply_network_isolation.sh'
+vagrant ssh backend -c 'sudo /home/vagrant/apply_network_isolation.sh'
+```
+
+### ⚙️ Configurações SSH Otimizadas
+
+Para evitar timeouts durante o provisionamento:
+```ruby
+config.ssh.connect_timeout = 300      # 5 minutos para conectar
+config.vm.boot_timeout = 1200         # 20 minutos para boot
+config.vm.graceful_halt_timeout = 300 # 5 minutos para shutdown
+```
+
+### Verificar Isolamento Completo
+
+```bash
+# Teste de Internet (deve falhar em VM2 e VM3)
+vagrant ssh frontend -c 'ping -c 2 8.8.8.8'  # ❌ Deve falhar
+vagrant ssh backend -c 'ping -c 2 8.8.8.8'   # ❌ Deve falhar
+vagrant ssh proxy -c 'ping -c 2 8.8.8.8'     # ✅ Deve funcionar
+
+# Teste de Comunicação Interna (deve funcionar)
+vagrant ssh frontend -c 'ping -c 2 192.168.57.11'  # ✅ Frontend → Backend
+vagrant ssh proxy -c 'ping -c 2 192.168.56.11'     # ✅ Proxy → Frontend
+
+# Teste de Acesso do Host (apenas proxy deve funcionar)
+# No seu browser/terminal do host:
+# ✅ http://localhost:8081      (através do proxy)
+# ❌ http://192.168.56.11:5173  (direto frontend - deve falhar)
+# ❌ http://192.168.57.11:3333  (direto backend - deve falhar)
+```
 
 ## 🐛 Solução de Problemas
 
-### VM não inicia
+### 🚨 Timeouts SSH
 ```bash
-# Verificar logs do Vagrant
+# Se o Vagrant trava em "timeout during server version negotiating"
+vagrant halt && vagrant destroy -f
+vagrant up  # Tentar novamente
+
+# Verificar recursos do sistema
+# Certifique-se de ter 4GB+ RAM livres
+```
+
+### 🔧 VM não inicia
+```bash
+# Verificar logs detalhados
 vagrant up --debug
 
-# Verificar status do VirtualBox
+# Verificar VMs existentes no VirtualBox
 vboxmanage list runningvms
+vboxmanage list vms
+
+# Limpar VMs orfãs
+vagrant global-status --prune
 ```
 
-### Serviços não respondem
-```bash
-# Verificar se os serviços estão rodando
-vagrant ssh backend -c 'ps aux | grep node'
-vagrant ssh frontend -c 'ps aux | grep node'
-
-# Reiniciar serviços
-vagrant ssh backend -c '/home/vagrant/start-backend.sh'
-vagrant ssh frontend -c '/home/vagrant/start-frontend.sh'
-```
-
-### Problemas de rede
+### 🌐 Problemas de rede
 ```bash
 # Verificar conectividade entre VMs
-vagrant ssh frontend -c 'ping 192.168.57.11'
-vagrant ssh proxy -c 'ping 192.168.56.11'
+vagrant ssh frontend -c 'ping -c 2 192.168.57.11'  # Frontend → Backend
+vagrant ssh proxy -c 'ping -c 2 192.168.56.11'     # Proxy → Frontend
+
+# Verificar configuração de rede
+vagrant ssh frontend -c 'ip addr show'
+vagrant ssh backend -c 'ip addr show'
 ```
 
-### Banco de dados
+### ⚙️ Serviços não respondem
+```bash
+# Verificar status dos serviços
+vagrant ssh backend -c 'systemctl status backend'
+vagrant ssh frontend -c 'systemctl status frontend'
+
+# Reiniciar serviços manualmente
+vagrant ssh backend -c 'sudo systemctl restart backend'
+vagrant ssh frontend -c 'sudo systemctl restart frontend'
+
+# Verificar processos Node.js
+vagrant ssh backend -c 'ps aux | grep node'
+vagrant ssh frontend -c 'ps aux | grep node'
+```
+
+### 🗄️ Problemas no banco de dados
 ```bash
 # Recriar banco de dados
-vagrant ssh backend -c 'cd /vagrant/backend && npm run migrate && npm run seed'
+vagrant ssh backend -c 'cd /home/vagrant/backend-local && npm run migrate && npm run seed'
 
-# Verificar banco
-vagrant ssh backend -c 'cd /vagrant/backend && sqlite3 src/db/app-data.db ".tables"'
+# Verificar banco SQLite
+vagrant ssh backend -c 'cd /home/vagrant/backend-local && sqlite3 src/db/app-data.db ".tables"'
+
+# Ver logs do backend
+vagrant ssh backend -c 'tail -f /var/log/backend.log'
+```
+
+### 🔄 Reset completo
+```bash
+# Se nada funcionar, reset completo:
+vagrant destroy -f
+vagrant box update ubuntu/focal64
+vagrant up
 ```
 
 ## 🔄 Desenvolvimento

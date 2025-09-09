@@ -86,26 +86,26 @@ O projeto implementa uma arquitetura de 3 camadas com isolamento de rede progres
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    HOST (localhost:8081)                   │
-│                     ↕ (proxy reverso)                      │
+│                    HOST (localhost:8081)                    │
+│                     ↕ (proxy reverso)                       │
 └─────────────────────────────────────────────────────────────┘
                                 ↕
 ┌─────────────────────────────────────────────────────────────┐
-│  VM1: PROXY (192.168.56.10)                               │
-│  • Conexão: Host + Internet + Frontend                     │
-│  • Nginx como gateway único                                │
+│  VM1: PROXY (192.168.56.10)                                 │
+│  • Conexão: Host + Internet + Frontend                      │
+│  • Nginx como gateway único                                 │
 └─────────────────────────────────────────────────────────────┘
                                 ↕
 ┌─────────────────────────────────────────────────────────────┐
-│  VM2: FRONTEND (192.168.56.11 + 192.168.57.10)           │
-│  • Conexão: Proxy + Backend                               │
-│  • Internet: Removida após provisionamento                 │
+│  VM2: FRONTEND (192.168.56.11 + 192.168.57.10)              │
+│  • Conexão: Proxy + Backend                                 │
+│  • Internet: Removida após provisionamento                  │
 └─────────────────────────────────────────────────────────────┘
                                 ↕
 ┌─────────────────────────────────────────────────────────────┐
-│  VM3: BACKEND (192.168.57.11)                             │
-│  • Conexão: APENAS Frontend                               │
-│  • Internet: Removida após provisionamento                 │
+│  VM3: BACKEND (192.168.57.11)                               │
+│  • Conexão: APENAS Frontend                                 │
+│  • Internet: Removida após provisionamento                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 

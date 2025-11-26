@@ -4,13 +4,16 @@
   "description": "Backend da aplicação de controle de gastos e metas",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "dev": "tsx watch src/server.ts",
     "migrate": "knex migrate:latest",
     "migrate:make": "knex migrate:make",
     "migrate:rollback": "knex migrate:rollback",
     "seed": "knex seed:run",
-    "seed:make": "knex seed:make"
+    "seed:make": "knex seed:make",
+    "test:e2e": "playwright test",
+    "test:all": "npm run test && npm run test:e2e"
   },
   "keywords": [
     "controle-gastos",
@@ -31,8 +34,11 @@
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/node": "^24.2.1",
+    "@vitest/coverage-v8": "^2.1.4",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^2.1.4",
+    "@playwright/test": "^1.48.2"
   }
 }

@@ -209,3 +209,21 @@ O projeto suporta diferentes ambientes configurados no `knexfile.ts`:
 - **Production**: `./src/db/production.db`
 
 O ambiente é determinado pela variável `NODE_ENV`.
+
+## Testes
+
+- Testes unitários (Vitest) 😒
+  - `npm test`: roda todos os testes unitários uma vez.
+  - `npm run test:watch`: roda os testes unitários em modo watch.
+
+- Testes E2E (Playwright) 😒
+  - Requer que a API esteja rodando (por exemplo, via Docker ou `npm run dev`).
+  - `npm run test:e2e`: executa a suíte E2E que valida fluxos principais da API.
+
+### Rodando testes com Docker
+
+- Backend já sobe pelo Docker Compose, então você pode:
+  - Rodar testes unitários dentro do container:
+    - `docker-compose run --rm backend npm test`
+  - Rodar testes E2E (API deve estar acessível em \`http://localhost:3333\`):
+    - `docker-compose run --rm backend npm run test:e2e`

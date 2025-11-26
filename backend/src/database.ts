@@ -1,7 +1,17 @@
-import knex from 'knex'
+import knex, { type Knex } from 'knex'
+import knexConfig from '../knexfile'
 
-export const db = knex({
-  client: 'sqlite',
-  connection: { filename: './src/db/app-data.db' },
-  useNullAsDefault: true,
-})
+type Environment = 'development' | 'test' | 'production'
+
+function resolveEnvironment(): Environment {
+  const env = process.env.NODE_ENV
+  if (env === 'test' || env === 'production') {
+    return env
+  }
+  return 'development'
+}
+
+const environment: Environment = resolveEnvironment()
+const config: Knex.Config = knexConfig[environment]
+
+export const db = knex(config)

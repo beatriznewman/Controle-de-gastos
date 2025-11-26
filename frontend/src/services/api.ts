@@ -1,10 +1,9 @@
-import axios from 'axios'
+import axios from "axios";
 
-// Usa proxy do Vite quando em dev (Vagrant/host) e caminho absoluto em prod
-const baseURL = import.meta.env.PROD ? '/api' : '/api'
+export const API_URL = import.meta.env.VITE_API_URL;
 
 const api = axios.create({
-  baseURL,
-})
+  baseURL: API_URL,
+});
 
-export default api
+export default api;

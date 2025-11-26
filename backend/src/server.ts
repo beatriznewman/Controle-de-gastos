@@ -1,13 +1,17 @@
 import { app } from './app'
 
-const PORT = 3333
+const portEnv = process.env.PORT
+const PORT = portEnv ? Number(portEnv) : 3333
 
-app.listen({
+app
+  .listen({
     port: PORT,
     host: '0.0.0.0',
-}).then(() => {
+  })
+  .then(() => {
     console.log('HTTP server running on port:', PORT)
-}).catch((err) => {
+  })
+  .catch((err) => {
     console.error('Erro ao iniciar servidor:', err)
     process.exit(1)
-})
+  })

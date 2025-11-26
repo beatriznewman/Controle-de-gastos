@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
+import { clearDatabase } from './db-utils'
 
 test('cria um gasto e verifica se aparece na listagem', async ({ request }) => {
+  await clearDatabase(request)
+
   const categoriaResponse = await request.post('/categorias', {
     data: {
       titulo: 'Categoria E2E',

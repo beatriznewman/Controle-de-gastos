@@ -719,4 +719,19 @@ app.get('/', async () => {
     return tables
 })
 
+// ===== ROTAS DE TESTE (habilitadas via ENABLE_TEST_ROUTES) =====
+if (process.env.ENABLE_TEST_ROUTES === 'true') {
+    app.post('/test/clear', async () => {
+        try {
+            await db('gastos').delete()
+            await db('metas').delete()
+            await db('categorias').delete()
+            return { message: 'Banco de dados limpo com sucesso' }
+        } catch (error) {
+            console.error('Erro ao limpar banco de dados:', error)
+            throw new Error('Erro interno do servidor')
+        }
+    })
+}
+
 export { app }

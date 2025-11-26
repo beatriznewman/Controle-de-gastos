@@ -6,6 +6,7 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_FILE=/data/db.sqlite
+      - ENABLE_TEST_ROUTES=${ENABLE_TEST_ROUTES:-false}
     volumes:
       - backend_data:/data
       - backend_node_modules:/usr/src/app/node_modules

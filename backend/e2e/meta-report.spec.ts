@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
+import { clearDatabase } from './db-utils'
 
 test('cria meta para categoria e verifica relatório da categoria', async ({ request }) => {
+  await clearDatabase(request)
+
   const categoriaResponse = await request.post('/categorias', {
     data: {
       titulo: 'Categoria Metas E2E',
@@ -45,5 +48,4 @@ test('cria meta para categoria e verifica relatório da categoria', async ({ req
   expect(Array.isArray(relatorio.metas)).toBe(true)
   expect(relatorio.estatisticas.totalMetas).toBeGreaterThan(0)
 })
-
 

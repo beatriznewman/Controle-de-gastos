@@ -1,6 +1,6 @@
 # CONTROLE DE GASTOS
 
-## Integrantes 
+## Integrantes  
 - Beatriz Cupa Newman 
 - Júlia Machado Duran  
 - Luigi Bertoli Menezes 
